@@ -1,0 +1,41 @@
+import boto3
+import os
+
+def lambda_handler(event, context):
+    # Initialize AWS clients
+    s3 = boto3.client('s3')
+    polly = boto3.client('polly')
+    
+    # Get bucket and file information from the event
+    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    key = event['Records'][0]['s3']['object']['key']
+    
+    # Download the text file from S3
+    download_path = f"/tmp/{key.split('/')[-1]}"
+    s3.download_file(bucket_name, key, download_path)
+    
+    # Read the content of the text file
+    with open(download_path, 'r') as file:
+        text = file.read()
+    
+    # Convert text to speech using Amazon Polly
+    response = polly.synthesize_speech(
+        Text=text,
+        OutputFormat='mp3',
+        VoiceId='Joanna'  # You can change the voice ID as needed
+    )
+    
+    # Save the audio stream to a file
+    audio_key = key.rsplit('.', 1)[0] + '.mp3'
+    audio_path = f"/tmp/{audio_key.split('/')[-1]}"
+    
+    with open(audio_path, 'wb') as file:
+        file.write(response['AudioStream'].read())
+    
+    # Upload the audio file to the S3 bucket
+    s3.upload_file(audio_path, bucket_name, audio_key)
+    
+    return {
+        'statusCode': 200,
+        'body': f'Audio file saved as {audio_key} in bucket {bucket_name}'
+    }
